@@ -1,0 +1,40 @@
+﻿[22:40:46] FindDnConsole: paths=2 result=O:\app\雷电\新建文件夹\leidian\LDPlayer9\ldconsole.exe
+[22:40:46] GetEmulatorInstances called, paths=2
+[22:40:46] list2[O:\app\雷电\新建文件夹\leidian\LDPlayer9\ldconsole.exe] output=[0,雷电模拟器,0,0,0,-1,-1,720,1280,320\r\n]
+[22:40:46] list2[O:\app\雷电\leidian\LDPlayer14\ldconsole.exe] output=[0,雷电模拟器1,134716,134664,1,48228,44308,720,1280,240\r\n1,雷电模拟器2,0,0,0,-1,-1,720,1280,240\r\n]
+[22:40:46] GetEmulatorInstances result: 3 instances
+[22:42:35] FindDnConsole: paths=2 result=O:\app\雷电\新建文件夹\leidian\LDPlayer9\ldconsole.exe
+[22:42:35] GetEmulatorInstances called, paths=2
+[22:42:35] list2[O:\app\雷电\新建文件夹\leidian\LDPlayer9\ldconsole.exe] output=[0,雷电模拟器,0,0,0,-1,-1,720,1280,320\r\n]
+[22:42:35] list2[O:\app\雷电\leidian\LDPlayer14\ldconsole.exe] output=[0,雷电模拟器1,134716,134664,1,48228,44308,720,1280,240\r\n1,雷电模拟器2,0,0,0,-1,-1,720,1280,240\r\n]
+[22:42:35] GetEmulatorInstances result: 3 instances
+[22:45:57] FindDnConsole: paths=2 result=O:\app\雷电\新建文件夹\leidian\LDPlayer9\ldconsole.exe
+[22:45:57] GetEmulatorInstances called, paths=2
+[22:45:57] list2[O:\app\雷电\新建文件夹\leidian\LDPlayer9\ldconsole.exe] output=[0,雷电模拟器,0,0,0,-1,-1,720,1280,320\r\n]
+[22:45:57] list2[O:\app\雷电\leidian\LDPlayer14\ldconsole.exe] output=[0,雷电模拟器1,134716,134664,1,48228,44308,720,1280,240\r\n1,雷电模拟器2,0,0,0,-1,-1,720,1280,240\r\n]
+[22:45:57] GetEmulatorInstances result: 3 instances
+[22:47:15] FindDnConsole: paths=2 result=O:\app\雷电\新建文件夹\leidian\LDPlayer9\ldconsole.exe
+[22:47:15] GetEmulatorInstances called, paths=2
+[22:47:15] list2[O:\app\雷电\新建文件夹\leidian\LDPlayer9\ldconsole.exe] output=[0,雷电模拟器,0,0,0,-1,-1,720,1280,320\r\n]
+[22:47:15] list2[O:\app\雷电\leidian\LDPlayer14\ldconsole.exe] output=[0,雷电模拟器1,134716,134664,1,48228,44308,720,1280,240\r\n1,雷电模拟器2,0,0,0,-1,-1,720,1280,240\r\n]
+[22:47:15] GetEmulatorInstances result: 3 instances
+[22:49:08] FindDnConsole: paths=2 result=O:\app\雷电\新建文件夹\leidian\LDPlayer9\ldconsole.exe
+[22:49:08] GetEmulatorInstances called, paths=2
+[22:49:08] list2[O:\app\雷电\新建文件夹\leidian\LDPlayer9\ldconsole.exe] output=[0,雷电模拟器,0,0,0,-1,-1,720,1280,320\r\n]
+[22:49:08] list2[O:\app\雷电\leidian\LDPlayer14\ldconsole.exe] output=[0,雷电模拟器1,134716,134664,1,48228,44308,720,1280,240\r\n1,雷电模拟器2,0,0,0,-1,-1,720,1280,240\r\n]
+[22:49:08] GetEmulatorInstances result: 3 instances
+[23:00:20] FindDnConsole: paths=2 result=O:\app\雷电\新建文件夹\leidian\LDPlayer9\ldconsole.exe
+[23:00:20] GetEmulatorInstances called, paths=2
+[23:00:20] list2[O:\app\雷电\新建文件夹\leidian\LDPlayer9\ldconsole.exe] output=[0,雷电模拟器,0,0,0,-1,-1,720,1280,320\r\n]
+[23:00:20] list2[O:\app\雷电\leidian\LDPlayer14\ldconsole.exe] output=[0,雷电模拟器1,134716,134664,1,48228,44308,720,1280,240\r\n1,雷电模拟器2,0,0,0,-1,-1,720,1280,240\r\n]
+[23:00:20] GetEmulatorInstances result: 3 instances
+[23:01:14] FindDnConsole: paths=2 result=O:\app\雷电\新建文件夹\leidian\LDPlayer9\ldconsole.exe
+[23:01:14] GetEmulatorInstances called, paths=2
+[23:01:14] list2[O:\app\雷电\新建文件夹\leidian\LDPlayer9\ldconsole.exe] output=[0,雷电模拟器,0,0,0,-1,-1,720,1280,320\r\n]
+[23:01:14] list2[O:\app\雷电\leidian\LDPlayer14\ldconsole.exe] output=[0,雷电模拟器1,134716,134664,1,48228,44308,720,1280,240\r\n1,雷电模拟器2,0,0,0,-1,-1,720,1280,240\r\n]
+[23:01:14] GetEmulatorInstances result: 3 instances
+[00:01:23] FindDnConsole: paths=2 result=O:\app\雷电\新建文件夹\leidian\LDPlayer9\ldconsole.exe
+[00:01:23] GetEmulatorInstances called, paths=2
+[00:01:23] list2[O:\app\雷电\新建文件夹\leidian\LDPlayer9\ldconsole.exe] output=[0,雷电模拟器,0,0,0,-1,-1,720,1280,320\r\n]
+[00:01:23] list2[O:\app\雷电\leidian\LDPlayer14\ldconsole.exe] output=[0,雷电模拟器1,134716,134664,1,48228,44308,720,1280,240\r\n1,雷电模拟器2,0,0,0,-1,-1,720,1280,240\r\n]
+[00:01:23] GetEmulatorInstances result: 3 instances

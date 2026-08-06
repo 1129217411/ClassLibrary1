@@ -1,0 +1,29 @@
+﻿[23:01:33] 自动化开始执行
+[23:01:34] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (407540 bytes)
+[23:01:34] OCRText 耗时: 336 ms
+[23:01:34] 系统应用
+[23:01:39] 自动化开始执行
+[23:01:39] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (406714 bytes)
+[23:01:39] OCRText 耗时: 339 ms
+[23:01:39] 系统应用
+[23:01:40] 自动化开始执行
+[23:01:40] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (407419 bytes)
+[23:01:40] OCRText 耗时: 338 ms
+[23:01:40] 系统应用
+[23:11:32] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (407442 bytes)
+[23:11:33] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (407058 bytes)
+[23:11:33] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (409168 bytes)
+[23:11:34] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (408286 bytes)
+[23:26:03] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (407608 bytes)
+[23:26:04] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (407679 bytes)
+[23:26:04] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (407405 bytes)
+[23:26:05] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (407723 bytes)
+[23:38:49] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (407565 bytes)
+[23:38:50] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (408194 bytes)
+[23:38:50] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (409547 bytes)
+[23:39:27] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (407538 bytes)
+[23:39:28] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (408165 bytes)
+[23:39:28] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (408448 bytes)
+[23:39:29] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (407538 bytes)
+[23:43:15] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (407797 bytes)
+[23:55:22] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (407729 bytes)

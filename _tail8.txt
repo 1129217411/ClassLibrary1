@@ -1,0 +1,9 @@
+﻿[23:38:50] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (408194 bytes)
+[23:38:50] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (409547 bytes)
+[23:39:27] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (407538 bytes)
+[23:39:28] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (408165 bytes)
+[23:39:28] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (408448 bytes)
+[23:39:29] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (407538 bytes)
+[23:43:15] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (407797 bytes)
+[23:55:22] [截图] adb流截图成功: Z:\interest\ClassLibrary1\ClassLibrary1\bin\Release\screenshot_0.png (407729 bytes)
+NOW: 00:02:41

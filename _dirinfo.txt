@@ -1,0 +1,17 @@
+﻿
+Name               Length LastWriteTime    
+----               ------ -------------    
+diag.txt            35890 2026/8/5 0:01:23 
+ocr_crop_0.png       2142 2026/8/5 0:01:17 
+ocr_warm.png          142 2026/8/5 0:01:15 
+_test_ocrtext.exe    4608 2026/8/5 0:01:15 
+ClassLibrary1.pdb   77312 2026/8/5 0:01:07 
+ClassLibrary1.exe   43520 2026/8/5 0:01:07 
+log.txt              2785 2026/8/4 23:55:22
+screenshot_0.png   407729 2026/8/4 23:55:22
+_test_win_diag.exe   7168 2026/8/4 23:43:04
+_test_crop.exe       4096 2026/8/4 23:12:13
+ocr_crop_test.png    2446 2026/8/4 22:55:30
+ocr_server.py        6969 2026/8/4 22:54:20
+
+

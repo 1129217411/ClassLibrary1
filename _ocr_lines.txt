@@ -1,0 +1,9 @@
+﻿
+> ClassLibrary1\bin\Release\log.txt:3:[23:01:34] OCRText 耗时: 336 ms
+  ClassLibrary1\bin\Release\log.txt:4:[23:01:34] 系统应用
+> ClassLibrary1\bin\Release\log.txt:7:[23:01:39] OCRText 耗时: 339 ms
+  ClassLibrary1\bin\Release\log.txt:8:[23:01:39] 系统应用
+> ClassLibrary1\bin\Release\log.txt:11:[23:01:40] OCRText 耗时: 338 ms
+  ClassLibrary1\bin\Release\log.txt:12:[23:01:40] 系统应用
+
+
