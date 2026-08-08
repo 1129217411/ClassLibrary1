@@ -10,6 +10,7 @@ namespace ClassLibrary1
     {
         public void Run(EmulatorHelper emu)
         {
+            emu.InitScreenshotDaemon();
             emu.Log("自动化开始执行");
             // 示例：截图并检查像素颜色，匹配则点击
             // string img = emu.Screenshot();
@@ -72,14 +73,25 @@ namespace ClassLibrary1
             
             
             // emu.Wait(10000);
-            var 欢迎回来 = new List<(int, int, int)> { (209, 246, 0x638ac6), (370, 250, 0xf6f6f7), (374, 250, 0x5074ac), (102, 409, 0xc35f5a) };
+            // var 欢迎回来 = new List<(int, int, int)> { (209, 246, 0x638ac6), (370, 250, 0xf6f6f7), (374, 250, 0x5074ac), (102, 409, 0xc35f5a) };
+            // var isColorMatch = emu.IsColorMatch(欢迎回来);
+            // if (isColorMatch)
+            // {
+            //     emu.Log("欢迎回来-确认", true);
+            //     emu.Tap(359,1025);
+            // }
+            
+            var 欢迎回来 = new List<(int, int, int)> { (1, 1, 0x2a4263),(503, 1184, 0x5275ad) };
             var isColorMatch = emu.IsColorMatch(欢迎回来);
             if (isColorMatch)
             {
                 emu.Log("欢迎回来-确认", true);
-                emu.Tap(359,1025);
-            }
-           
+            } else
+            {
+                emu.Log("未找到欢迎回来按钮", true);
+            } 
+            
+            
         }
     }
     // ================================================

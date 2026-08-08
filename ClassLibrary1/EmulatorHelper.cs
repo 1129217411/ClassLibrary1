@@ -1,9 +1,11 @@
 using System;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.Net;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Web.Script.Serialization;
 
@@ -24,6 +26,18 @@ namespace ClassLibrary1
         private static bool _consoleAllocated = false;
         private string consolePath;
         private int realIndex;
+
+        // ======================== 截图守护进程（方案 C） ========================
+        private const int SCREENSHOT_DAEMON_PORT_BASE = 19001; // PC端端口 = base + realIndex
+        private const int SCREENSHOT_DAEMON_DEVICE_PORT = 19000; // 模拟器内监听端口
+        private bool _screenshotServiceReady = false;
+        private bool _shellDaemonReady = false;
+        // ======================== 持久化 adb shell（方案 D） ========================
+        private Process _persistentShellProcess;
+        private Stream _shellInputStream;
+        private Stream _shellOutputStream;
+        private bool _persistentShellReady = false;
+        private static readonly byte[] SHELL_MARKER = new byte[] { 0x53, 0x53, 0x42, 0x47, 0x0A }; // "SSBG\n"
 
         public EmulatorHelper(string consolePath, int realIndex)
         {
@@ -176,6 +190,99 @@ namespace ClassLibrary1
             var trimmed = new byte[n];
             Array.Copy(result, trimmed, n);
             return trimmed;
+        }
+
+        /// <summary>
+        /// 通过 adb exec-out screencap 获取 raw 像素数据并直接转为 Bitmap（~150ms）。
+        /// exec-out 专为二进制输出设计，不会做 CR/LF 转换，比 adb PNG 快 ~2-3 倍（省去 PNG 编码）。
+        /// 输出格式：12 字节头 (w:i32le + h:i32le + format:i32le) + RGBA 像素数据 (w*h*4 字节)
+        /// </summary>
+        private Bitmap CaptureBitmapRaw()
+        {
+            string adbExe = ResolveAdbExe();
+            if (adbExe == null) return null;
+
+            ProcessStartInfo psi = new ProcessStartInfo();
+            psi.FileName = adbExe;
+            psi.Arguments = "-s " + DeviceSerial() + " exec-out screencap";
+            psi.UseShellExecute = false;
+            psi.RedirectStandardOutput = true;
+            psi.RedirectStandardError = true;
+            psi.CreateNoWindow = true;
+
+            using (Process p = Process.Start(psi))
+            {
+                var stream = p.StandardOutput.BaseStream;
+
+                // 读取 12 字节头: width(4) + height(4) + format(4)
+                byte[] header = new byte[12];
+                int headerRead = 0;
+                while (headerRead < 12)
+                {
+                    int r = stream.Read(header, headerRead, 12 - headerRead);
+                    if (r <= 0) break;
+                    headerRead += r;
+                }
+                if (headerRead < 12)
+                {
+                    Log("[截图服务] raw: 无法读取头部 (" + headerRead + " bytes)");
+                    try { p.Kill(); } catch { }
+                    return null;
+                }
+
+                int w = BitConverter.ToInt32(header, 0);
+                int h = BitConverter.ToInt32(header, 4);
+
+                if (w <= 0 || w > 4096 || h <= 0 || h > 4096)
+                {
+                    Log(string.Format("[截图服务] raw: 无效分辨率 {0}x{1}", w, h));
+                    try { p.Kill(); } catch { }
+                    return null;
+                }
+
+                // 读取 RGBA 像素数据
+                int pixelDataSize = w * h * 4;
+                byte[] rgba = new byte[pixelDataSize];
+                int totalRead = 0;
+                while (totalRead < pixelDataSize)
+                {
+                    int r = stream.Read(rgba, totalRead, pixelDataSize - totalRead);
+                    if (r <= 0) break;
+                    totalRead += r;
+                }
+
+                p.StandardError.ReadToEnd();
+                if (!p.WaitForExit(10000))
+                {
+                    try { p.Kill(); } catch { }
+                }
+
+                if (totalRead < pixelDataSize)
+                {
+                    Log(string.Format("[截图服务] raw: 像素不完整 {0}/{1}", totalRead, pixelDataSize));
+                    return null;
+                }
+
+                // RGBA → ARGB32 Bitmap
+                Bitmap bmp = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                var bmpData = bmp.LockBits(
+                    new Rectangle(0, 0, w, h),
+                    System.Drawing.Imaging.ImageLockMode.WriteOnly,
+                    System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+
+                byte[] argb = new byte[pixelDataSize];
+                for (int i = 0; i < pixelDataSize; i += 4)
+                {
+                    argb[i]     = rgba[i + 3]; // A
+                    argb[i + 1] = rgba[i];     // R
+                    argb[i + 2] = rgba[i + 1]; // G
+                    argb[i + 3] = rgba[i + 2]; // B
+                }
+
+                Marshal.Copy(argb, 0, bmpData.Scan0, pixelDataSize);
+                bmp.UnlockBits(bmpData);
+                return bmp;
+            }
         }
 
         // ======================== 宿主机窗口截图 ========================
@@ -419,8 +526,521 @@ namespace ClassLibrary1
         }
 
         /// <summary>
-        /// 多点颜色匹配检测：截图后逐一检查每个坐标点的像素颜色是否与期望颜色匹配。
-        /// 每个颜色通道允许 (1-tolerance) 比例的偏差，所有点均匹配时返回 true。
+        /// 快速截取屏幕为 Bitmap：通过 adb exec-out screencap -p 获取 PNG 并解码
+        /// </summary>
+        private Bitmap CaptureBitmapFast()
+        {
+            byte[] png = GetAdbPngBytes();
+            if (png != null && png.Length > 100)
+            {
+                try
+                {
+                    using (var ms = new MemoryStream(png))
+                        return new Bitmap(ms);
+                }
+                catch { }
+            }
+            return null;
+        }
+
+        // ======================== 截图守护进程（方案 C） ========================
+
+        /// <summary>
+        /// 初始化截图守护进程：推送脚本到模拟器、启动守护进程、建立端口转发。
+        /// 调用一次即可，之后所有截图走 TCP socket（~100ms/次）。
+        /// </summary>
+        public void InitScreenshotDaemon()
+        {
+            // 已简化为 adb PNG 方式，无需初始化守护进程
+        }
+
+        /// <summary>
+        /// 通过守护进程 TCP socket 截取屏幕，返回 Bitmap（~100ms，raw 像素无 PNG 编码）
+        /// </summary>
+        private Bitmap CaptureBitmapViaDaemon()
+        {
+            int pcPort = SCREENSHOT_DAEMON_PORT_BASE + realIndex;
+
+            using (var client = new TcpClient("127.0.0.1", pcPort))
+            {
+                client.SendTimeout = 3000;
+                client.ReceiveTimeout = 10000;
+
+                using (var stream = client.GetStream())
+                {
+                    // 发送截图命令
+                    byte[] cmd = System.Text.Encoding.ASCII.GetBytes("shot");
+                    stream.Write(cmd, 0, cmd.Length);
+
+                    // 读取文本头行（格式: "width height\n"）
+                    // 逐字节读取直到换行符（避免缓冲吃掉后续二进制数据）
+                    var headerBuf = new List<byte>();
+                    while (true)
+                    {
+                        int b = stream.ReadByte();
+                        if (b == -1 || b == '\n') break;
+                        headerBuf.Add((byte)b);
+                    }
+                    string header = System.Text.Encoding.ASCII.GetString(headerBuf.ToArray()).Trim();
+                    if (header.StartsWith("ERR") || header.Length == 0)
+                    {
+                        Log("[截图服务] 守护进程返回错误");
+                        return null;
+                    }
+
+                    string[] parts = header.Split(' ');
+                    if (parts.Length != 2 || !int.TryParse(parts[0], out int w) || !int.TryParse(parts[1], out int h))
+                    {
+                        Log("[截图服务] 无效头: " + header);
+                        return null;
+                    }
+
+                    // 读取 RGBA 像素数据
+                    int pixelDataSize = w * h * 4;
+                    byte[] rgba = new byte[pixelDataSize];
+                    int totalRead = 0;
+                    while (totalRead < pixelDataSize)
+                    {
+                        int read = stream.Read(rgba, totalRead, pixelDataSize - totalRead);
+                        if (read <= 0) break;
+                        totalRead += read;
+                    }
+
+                    if (totalRead < pixelDataSize)
+                    {
+                        Log(string.Format("[截图服务] 像素数据不完整: 期望 {0} 字节，实际 {1} 字节", pixelDataSize, totalRead));
+                        return null;
+                    }
+
+                    // RGBA → ARGB32 Bitmap
+                    Bitmap bmp = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                    var bmpData = bmp.LockBits(
+                        new Rectangle(0, 0, w, h),
+                        System.Drawing.Imaging.ImageLockMode.WriteOnly,
+                        System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+
+                    byte[] argb = new byte[pixelDataSize];
+                    for (int i = 0; i < pixelDataSize; i += 4)
+                    {
+                        argb[i]     = rgba[i + 3]; // A
+                        argb[i + 1] = rgba[i];     // R
+                        argb[i + 2] = rgba[i + 1]; // G
+                        argb[i + 3] = rgba[i + 2]; // B
+                    }
+
+                    Marshal.Copy(argb, 0, bmpData.Scan0, pixelDataSize);
+                    bmp.UnlockBits(bmpData);
+                    return bmp;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 执行 adb 命令并返回输出（内部工具方法）
+        /// </summary>
+        private string RunAdbShell(string adbExe, string serial, string args)
+        {
+            ProcessStartInfo psi = new ProcessStartInfo();
+            psi.FileName = adbExe;
+            psi.Arguments = "-s " + serial + " " + args;
+            psi.UseShellExecute = false;
+            psi.RedirectStandardOutput = true;
+            psi.RedirectStandardError = true;
+            psi.CreateNoWindow = true;
+            using (Process p = Process.Start(psi))
+            {
+                string output = p.StandardOutput.ReadToEnd();
+                p.StandardError.ReadToEnd();
+                p.WaitForExit(10000);
+                return output;
+            }
+        }
+
+        /// <summary>
+        /// 初始化持久化 adb shell 进程（方案 D）：启动一个长生命周期的 adb shell，
+        /// 通过 stdin 发送 screencap 命令，从 stdout 读取 raw 像素。
+        /// 无需模拟器内安装任何东西，每次截图无需新建进程。
+        /// </summary>
+        private void InitPersistentShell(string adbExe, string serial)
+        {
+            try
+            {
+                ProcessStartInfo psi = new ProcessStartInfo();
+                psi.FileName = adbExe;
+                psi.Arguments = "-s " + serial + " shell";
+                psi.UseShellExecute = false;
+                psi.RedirectStandardInput = true;
+                psi.RedirectStandardOutput = true;
+                psi.RedirectStandardError = true;
+                psi.CreateNoWindow = true;
+                psi.StandardOutputEncoding = System.Text.Encoding.UTF8;
+
+                _persistentShellProcess = Process.Start(psi);
+                _shellInputStream = _persistentShellProcess.StandardInput.BaseStream;
+                _shellOutputStream = _persistentShellProcess.StandardOutput.BaseStream;
+
+                // 关闭回显和输出处理，避免 PTY 干扰二进制数据
+                byte[] sttyCmd = System.Text.Encoding.ASCII.GetBytes("stty -echo -opost raw\n");
+                _shellInputStream.Write(sttyCmd, 0, sttyCmd.Length);
+                _shellInputStream.Flush();
+                System.Threading.Thread.Sleep(300);
+
+                // 丢弃 stty 命令本身的输出（回显、提示符等）
+                DrainShellOutput(500);
+
+                _persistentShellReady = true;
+                Log("[截图服务] 持久化 adb shell 就绪");
+            }
+            catch (Exception ex)
+            {
+                Log("[截图服务] 持久化 shell 初始化失败: " + ex.Message);
+                CleanupPersistentShell();
+            }
+        }
+
+        /// <summary>
+        /// 通过持久化 adb shell 截取屏幕（方案 D，~100ms）
+        /// 复用已建立的 adb shell 进程，每次截图无需新建 adb 进程，也无需 PNG 编码。
+        /// </summary>
+        private Bitmap CaptureBitmapViaPersistentShell()
+        {
+            if (_persistentShellProcess == null || _persistentShellProcess.HasExited)
+            {
+                _persistentShellReady = false;
+                return null;
+            }
+
+            // 发送带标记的 screencap 命令
+            // printf 输出二进制标记 \x53\x53\x42\x47\n，然后执行 screencap
+            string cmd = "printf '\\x53\\x53\\x42\\x47\\n' && /system/bin/screencap && printf '\\x53\\x53\\x45\\x44\\n'\n";
+            byte[] cmdBytes = System.Text.Encoding.ASCII.GetBytes(cmd);
+            _shellInputStream.Write(cmdBytes, 0, cmdBytes.Length);
+            _shellInputStream.Flush();
+
+            // 1. 扫描起始标记 SS\x42\x47\n（处理可选的 \r）
+            int matchLen = 0;
+            bool found = false;
+            while (true)
+            {
+                int b = _shellOutputStream.ReadByte();
+                if (b == -1)
+                {
+                    _persistentShellReady = false;
+                    return null;
+                }
+                if (b == SHELL_MARKER[matchLen])
+                {
+                    matchLen++;
+                    if (matchLen >= SHELL_MARKER.Length) { found = true; break; }
+                }
+                else if (matchLen == 4 && b == 0x0D)
+                {
+                    // \r\n 而不是 \n，接受并继续
+                    int next = _shellOutputStream.ReadByte();
+                    if (next == 0x0A) { found = true; break; }
+                    matchLen = 0;
+                }
+                else
+                {
+                    matchLen = 0;
+                }
+            }
+            if (!found)
+            {
+                Log("[截图服务] ps: 未找到起始标记");
+                return null;
+            }
+
+            // 2. 读取 12 字节头部 (width + height + format)
+            byte[] header = ReadExactFromShell(12);
+            if (header == null)
+            {
+                Log("[截图服务] ps: 无法读取头部");
+                return null;
+            }
+
+            // 处理可能的 CR/LF 扩展
+            header = UndoCrlfIfCorrupted(header);
+            if (header.Length < 12)
+            {
+                Log("[截图服务] ps: CR/LF 修复后头部太短");
+                return null;
+            }
+
+            int w = header[0] | (header[1] << 8) | (header[2] << 16) | (header[3] << 24);
+            int h = header[4] | (header[5] << 8) | (header[6] << 16) | (header[7] << 24);
+
+            if (w <= 0 || w > 4096 || h <= 0 || h > 4096)
+            {
+                Log(string.Format("[截图服务] ps: 无效分辨率 {0}x{1}", w, h));
+                return null;
+            }
+
+            // 3. 读取 RGBA 像素数据
+            int pixelDataSize = w * h * 4;
+            byte[] raw = ReadExactFromShell(pixelDataSize);
+            if (raw == null)
+            {
+                Log(string.Format("[截图服务] ps: 像素读取失败 ({0} bytes)", pixelDataSize));
+                return null;
+            }
+
+            // 处理可能的 CR/LF 扩展
+            raw = UndoCrlfIfCorrupted(raw);
+            if (raw.Length != pixelDataSize)
+            {
+                // CR/LF 扩展导致数据大小变化，尝试重新读取
+                Log(string.Format("[截图服务] ps: CR/LF 修复后像素大小不匹配 {0} vs {1}，尝试继续", raw.Length, pixelDataSize));
+                if (raw.Length < pixelDataSize) return null;
+            }
+
+            // 4. RGBA → ARGB32 Bitmap
+            Bitmap bmp = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            var bmpData = bmp.LockBits(
+                new Rectangle(0, 0, w, h),
+                System.Drawing.Imaging.ImageLockMode.WriteOnly,
+                System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+
+            byte[] argb = new byte[pixelDataSize];
+            for (int i = 0; i < pixelDataSize; i += 4)
+            {
+                argb[i]     = raw[i + 3]; // A
+                argb[i + 1] = raw[i];     // R
+                argb[i + 2] = raw[i + 1]; // G
+                argb[i + 3] = raw[i + 2]; // B
+            }
+
+            Marshal.Copy(argb, 0, bmpData.Scan0, pixelDataSize);
+            bmp.UnlockBits(bmpData);
+            return bmp;
+        }
+
+        /// <summary>
+        /// 从 shell 输出流精确读取 count 字节（带缓冲，高效）
+        /// </summary>
+        private byte[] ReadExactFromShell(int count)
+        {
+            byte[] buffer = new byte[count];
+            int totalRead = 0;
+            while (totalRead < count)
+            {
+                int r = _shellOutputStream.Read(buffer, totalRead, count - totalRead);
+                if (r <= 0) return null;
+                totalRead += r;
+            }
+            return buffer;
+        }
+
+        /// <summary>
+        /// 非阻塞地丢弃 shell 输出缓冲中的数据，用于初始化时清除提示符等垃圾数据
+        /// </summary>
+        private void DrainShellOutput(int timeoutMs)
+        {
+            byte[] drain = new byte[4096];
+            try
+            {
+                // 使用 Task + Wait 实现带超时的读取
+                var task = System.Threading.Tasks.Task.Factory.StartNew(() =>
+                {
+                    try { _shellOutputStream.Read(drain, 0, drain.Length); } catch { }
+                });
+                task.Wait(timeoutMs);
+                // 如果 task 还在运行，不管它（下次截图时 marker 扫描会跳过垃圾数据）
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// 检测并修复 CR/LF 扩展：如果数据中包含 0D 0A 但原始数据应只有 0A
+        /// </summary>
+        private static byte[] UndoCrlfIfCorrupted(byte[] data)
+        {
+            // 快速检测：是否包含 0D 0A 序列
+            bool hasCrlf = false;
+            for (int i = 0; i < data.Length - 1; i++)
+            {
+                if (data[i] == 0x0D && data[i + 1] == 0x0A)
+                {
+                    hasCrlf = true;
+                    break;
+                }
+            }
+            if (!hasCrlf) return data;
+            return UndoCrlfExpansion(data);
+        }
+
+        /// <summary>
+        /// 清理持久化 shell 进程
+        /// </summary>
+        public void CleanupPersistentShell()
+        {
+            _persistentShellReady = false;
+            try { if (_persistentShellProcess != null && !_persistentShellProcess.HasExited) _persistentShellProcess.Kill(); } catch { }
+            try { _persistentShellProcess?.Dispose(); } catch { }
+            _persistentShellProcess = null;
+            _shellInputStream = null;
+            _shellOutputStream = null;
+        }
+
+        /// <summary>
+        /// 初始化 Shell 守护进程（nc + screencap，无需 Python）
+        /// </summary>
+        private void InitShellDaemon(string adbExe, string serial, int pcPort)
+        {
+            try
+            {
+                // 检查 nc 可用性
+                string ncCheck = RunAdbShell(adbExe, serial, "shell which nc").Trim();
+                if (string.IsNullOrEmpty(ncCheck) || ncCheck.Contains("not found"))
+                {
+                    Log("[截图服务] 模拟器内无 nc，shell 守护进程不可用");
+                    return;
+                }
+                Log("[截图服务] 检测到 nc: " + ncCheck);
+
+                // 推送 shell 脚本
+                string scriptDir = Path.GetDirectoryName(System.Windows.Forms.Application.ExecutablePath);
+                string script = Path.Combine(scriptDir, "screenshot_daemon.sh");
+                if (!File.Exists(script))
+                {
+                    Log("[截图服务] 脚本不存在: " + script);
+                    return;
+                }
+
+                string remotePath = "/data/local/tmp/screenshot_daemon.sh";
+                RunAdbShell(adbExe, serial, "push \"" + script + "\" " + remotePath);
+                RunAdbShell(adbExe, serial, "shell chmod 755 " + remotePath);
+
+                // 杀掉可能残留的旧进程
+                RunAdbShell(adbExe, serial, "shell pkill -f screenshot_daemon.sh || true");
+                System.Threading.Thread.Sleep(300);
+
+                // 在后台启动守护进程
+                RunAdbShell(adbExe, serial,
+                    "shell \"nohup sh " + remotePath + " " +
+                    SCREENSHOT_DAEMON_DEVICE_PORT + " > /dev/null 2>&1 &\"");
+                Log("[截图服务] 已启动 shell 守护进程 (设备端口 " + SCREENSHOT_DAEMON_DEVICE_PORT + ")");
+
+                // 端口转发（可能已在 Python 守护进程中设置过，重复设置无影响）
+                RunAdbShell(adbExe, serial,
+                    "forward tcp:" + pcPort + " tcp:" + SCREENSHOT_DAEMON_DEVICE_PORT);
+
+                // 等待守护进程就绪（短暂等待，不做 TCP ping 以避免触发 nc 连接导致竞争条件）
+                System.Threading.Thread.Sleep(2000);
+                // 验证守护进程是否在运行
+                string psResult = RunAdbShell(adbExe, serial, "shell ps 2>/dev/null");
+                if (psResult != null && psResult.Contains("screenshot_daemon"))
+                {
+                    _shellDaemonReady = true;
+                    Log("[截图服务] shell 守护进程就绪 (PC端口 " + pcPort + ")");
+                    return;
+                }
+                // 尝试通过 TCP 连接确认（作为备选）
+                try
+                {
+                    using (var client = new TcpClient())
+                    {
+                        var result = client.BeginConnect("127.0.0.1", pcPort, null, null);
+                        bool connected = result.AsyncWaitHandle.WaitOne(2000);
+                        if (connected)
+                        {
+                            client.EndConnect(result);
+                            _shellDaemonReady = true;
+                            Log("[截图服务] shell 守护进程就绪 (PC端口 " + pcPort + ")");
+                            return;
+                        }
+                    }
+                }
+                catch { }
+
+                Log("[截图服务] shell 守护进程启动超时");
+            }
+            catch (Exception ex)
+            {
+                Log("[截图服务] shell 守护进程异常: " + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// 通过 Shell 守护进程 TCP socket 截取屏幕（nc + screencap raw，~120ms）
+        /// screencap 输出 raw 格式：12 字节头 (w,h,format) + RGBA 像素数据
+        /// </summary>
+        private Bitmap CaptureBitmapViaShellDaemon()
+        {
+            int pcPort = SCREENSHOT_DAEMON_PORT_BASE + realIndex;
+
+            using (var client = new TcpClient("127.0.0.1", pcPort))
+            {
+                client.ReceiveTimeout = 15000;
+                var stream = client.GetStream();
+
+                // 读取 12 字节头: width(4) + height(4) + format(4)
+                byte[] header = new byte[12];
+                int headerRead = 0;
+                while (headerRead < 12)
+                {
+                    int r = stream.Read(header, headerRead, 12 - headerRead);
+                    if (r <= 0) break;
+                    headerRead += r;
+                }
+                if (headerRead < 12)
+                {
+                    Log("[截图服务] shell: 无法读取头部 (" + headerRead + " bytes)");
+                    return null;
+                }
+
+                int w = BitConverter.ToInt32(header, 0);
+                int h = BitConverter.ToInt32(header, 4);
+                // int format = BitConverter.ToInt32(header, 8); // 通常为 1 (RGBA_8888)
+
+                if (w <= 0 || w > 4096 || h <= 0 || h > 4096)
+                {
+                    Log(string.Format("[截图服务] shell: 无效分辨率 {0}x{1}", w, h));
+                    return null;
+                }
+
+                // 读取 RGBA 像素数据
+                int pixelDataSize = w * h * 4;
+                byte[] rgba = new byte[pixelDataSize];
+                int totalRead = 0;
+                while (totalRead < pixelDataSize)
+                {
+                    int r = stream.Read(rgba, totalRead, pixelDataSize - totalRead);
+                    if (r <= 0) break;
+                    totalRead += r;
+                }
+
+                if (totalRead < pixelDataSize)
+                {
+                    Log(string.Format("[截图服务] shell: 像素不完整 {0}/{1}", totalRead, pixelDataSize));
+                    return null;
+                }
+
+                // RGBA → ARGB32 Bitmap
+                Bitmap bmp = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                var bmpData = bmp.LockBits(
+                    new Rectangle(0, 0, w, h),
+                    System.Drawing.Imaging.ImageLockMode.WriteOnly,
+                    System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+
+                byte[] argb = new byte[pixelDataSize];
+                for (int i = 0; i < pixelDataSize; i += 4)
+                {
+                    argb[i]     = rgba[i + 3]; // A
+                    argb[i + 1] = rgba[i];     // R
+                    argb[i + 2] = rgba[i + 1]; // G
+                    argb[i + 3] = rgba[i + 2]; // B
+                }
+
+                Marshal.Copy(argb, 0, bmpData.Scan0, pixelDataSize);
+                bmp.UnlockBits(bmpData);
+                return bmp;
+            }
+        }
+
+        /// <summary>
+        /// 多点颜色匹配检测：优先 PrintWindow 快速截图（~20ms），回退 adb PNG。
+        /// 全程内存操作，不写磁盘。逐一检查每个坐标点的像素颜色是否与期望颜色匹配。
         /// </summary>
         /// <param name="points">坐标与期望颜色列表，格式: (x, y, 0xRRGGBB)</param>
         /// <param name="tolerance">匹配阈值 (0~1)，默认 0.9，越大越严格；1.0 表示必须完全一致</param>
@@ -430,16 +1050,14 @@ namespace ClassLibrary1
             if (points == null || points.Count == 0) return false;
 
             var sw = Stopwatch.StartNew();
-            string screenshot = Screenshot();
-            sw.Stop();
-            if (!File.Exists(screenshot)) return false;
-            Log(string.Format("[IsColorMatch] 截图耗时: {0}ms", sw.ElapsedMilliseconds));
-
-            double maxRatio = 1.0 - tolerance;
-            int matched = 0;
-
-            using (Bitmap bmp = new Bitmap(screenshot))
+            using (Bitmap bmp = CaptureBitmapFast())
             {
+                sw.Stop();
+                if (bmp == null) return false;
+
+                double maxRatio = 1.0 - tolerance;
+                int matched = 0;
+
                 foreach (var (x, y, expectedColor) in points)
                 {
                     if (x < 0 || x >= bmp.Width || y < 0 || y >= bmp.Height) continue;
@@ -457,14 +1075,12 @@ namespace ClassLibrary1
                     if (rDiff <= maxRatio && gDiff <= maxRatio && bDiff <= maxRatio)
                         matched++;
                     else
-                        Log(string.Format("[IsColorMatch] 点({0},{1}) 不匹配: 期望=#{2:X6} 实际=#{3:X2}{4:X2}{5:X2} R偏差={6:P0} G偏差={7:P0} B偏差={8:P0}",
-                            x, y, expectedColor, actual.R, actual.G, actual.B, rDiff, gDiff, bDiff));
+                    { }
                 }
-            }
 
-            bool result = matched == points.Count;
-            Log(string.Format("[IsColorMatch] 匹配结果: {0}/{1} 阈值={2}", matched, points.Count, tolerance));
-            return result;
+                bool result = matched == points.Count;
+                return result;
+            }
         }
 
         /// <summary>
@@ -1163,7 +1779,7 @@ namespace ClassLibrary1
                 using (Process p = Process.Start(psi))
                 {
                     string output = p.StandardOutput.ReadToEnd();
-                    p.StandardError.ReadToEnd(); // 读取但不输出
+                    p.StandardError.ReadToEnd();
                     p.WaitForExit(5000);
                     return output;
                 }

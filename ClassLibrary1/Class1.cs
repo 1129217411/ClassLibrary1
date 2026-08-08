@@ -12,18 +12,13 @@ namespace ClassLibrary1
     {
         private Panel leftPanel;
         private Panel rightPanel;
-        private Button btnMenu1;
-        private Button btnMenu2;
+        private Button btnMenuEmulator;
+        private Button btnMenuSettings;
 
-        // 个人信息页控件
-        private Panel pageProfile;
-        private TextBox txtName;
-        private TextBox txtAge;
-        private TextBox txtEmail;
-        private Label lblProfileMsg;
-
-        // 功能页控件
+        // 模拟器设置页
         private Panel pageFunction;
+        // 功能设置页
+        private Panel pageSettings;
 
         private Color menuNormal = Color.FromArgb(45, 45, 48);
         private Color menuActive = Color.FromArgb(0, 122, 204);
@@ -31,7 +26,7 @@ namespace ClassLibrary1
 
         public MainForm()
         {
-            this.Text = "简单软件页面";
+            this.Text = "畅玩冬日";
             this.Size = new Size(800, 500);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.MinimumSize = new Size(700, 400);
@@ -61,7 +56,7 @@ namespace ClassLibrary1
             mainLayout.Controls.Add(leftPanel, 0, 0);
 
             Label lblLogo = new Label();
-            lblLogo.Text = "我的应用";
+            lblLogo.Text = "畅玩冬日";
             lblLogo.Font = new Font("Microsoft YaHei", 12, FontStyle.Bold);
             lblLogo.ForeColor = Color.White;
             lblLogo.Location = new Point(15, 20);
@@ -74,13 +69,13 @@ namespace ClassLibrary1
             separator.BackColor = Color.FromArgb(80, 80, 80);
             leftPanel.Controls.Add(separator);
 
-            btnMenu1 = MakeMenuBtn("个人信息", 70);
-            btnMenu1.Click += (s, e) => ShowPage("profile");
-            leftPanel.Controls.Add(btnMenu1);
+            btnMenuEmulator = MakeMenuBtn("模拟器设置", 70);
+            btnMenuEmulator.Click += (s, e) => ShowPage("function");
+            leftPanel.Controls.Add(btnMenuEmulator);
 
-            btnMenu2 = MakeMenuBtn("快捷启动", 115);
-            btnMenu2.Click += (s, e) => ShowPage("function");
-            leftPanel.Controls.Add(btnMenu2);
+            btnMenuSettings = MakeMenuBtn("功能设置", 115);
+            btnMenuSettings.Click += (s, e) => ShowPage("settings");
+            leftPanel.Controls.Add(btnMenuSettings);
 
             Button btnExit = MakeMenuBtn("退出", 0);
             btnExit.Dock = DockStyle.Bottom;
@@ -93,15 +88,12 @@ namespace ClassLibrary1
             rightPanel.BackColor = Color.White;
             mainLayout.Controls.Add(rightPanel, 1, 0);
 
-            // 创建两个页面
-            BuildProfilePage();
+            // 创建页面
             BuildFunctionPage();
+            BuildSettingsPage();
 
-            // 默认显示个人信息
-            ShowPage("profile");
-
-            // 启动时加载已保存的信息
-            LoadProfile();
+            // 默认显示模拟器设置
+            ShowPage("function");
         }
 
         private Button MakeMenuBtn(string text, int y)
@@ -122,66 +114,21 @@ namespace ClassLibrary1
             return btn;
         }
 
-        private void BuildProfilePage()
+        private void BuildSettingsPage()
         {
-            pageProfile = new Panel();
-            pageProfile.Dock = DockStyle.Fill;
-            pageProfile.BackColor = Color.White;
-            pageProfile.Visible = false;
+            pageSettings = new Panel();
+            pageSettings.Dock = DockStyle.Fill;
+            pageSettings.BackColor = Color.White;
+            pageSettings.Visible = false;
 
             Label title = new Label();
-            title.Text = "个人信息";
+            title.Text = "功能设置";
             title.Font = new Font("Microsoft YaHei", 16, FontStyle.Bold);
             title.Location = new Point(30, 25);
             title.AutoSize = true;
-            pageProfile.Controls.Add(title);
+            pageSettings.Controls.Add(title);
 
-            int y = 80;
-            int gap = 48;
-            int lblX = 30;
-            int boxX = 110;
-
-            AddRow(pageProfile, "姓名：", lblX, y, boxX, out txtName);
-            AddRow(pageProfile, "年龄：", lblX, y + gap, boxX, out txtAge);
-            AddRow(pageProfile, "邮箱：", lblX, y + gap * 2, boxX, out txtEmail);
-
-            Button btnSave = new Button();
-            btnSave.Text = "保存";
-            btnSave.Location = new Point(boxX, y + gap * 3 + 15);
-            btnSave.Size = new Size(100, 36);
-            btnSave.FlatStyle = FlatStyle.Flat;
-            btnSave.FlatAppearance.BorderSize = 0;
-            btnSave.BackColor = Color.FromArgb(0, 122, 204);
-            btnSave.ForeColor = Color.White;
-            btnSave.Font = new Font("Microsoft YaHei", 10f);
-            btnSave.Cursor = Cursors.Hand;
-            btnSave.Click += BtnSaveProfile_Click;
-            pageProfile.Controls.Add(btnSave);
-
-            lblProfileMsg = new Label();
-            lblProfileMsg.Location = new Point(boxX + 115, y + gap * 3 + 23);
-            lblProfileMsg.AutoSize = true;
-            lblProfileMsg.Font = new Font("Microsoft YaHei", 9f);
-            pageProfile.Controls.Add(lblProfileMsg);
-
-            rightPanel.Controls.Add(pageProfile);
-        }
-
-        private void AddRow(Panel parent, string label, int lblX, int y, int boxX, out TextBox box)
-        {
-            Label lbl = new Label();
-            lbl.Text = label;
-            lbl.Location = new Point(lblX, y + 3);
-            lbl.AutoSize = true;
-            lbl.Font = new Font("Microsoft YaHei", 10f);
-            parent.Controls.Add(lbl);
-
-            box = new TextBox();
-            box.Location = new Point(boxX, y);
-            box.Size = new Size(300, 28);
-            box.Font = new Font("Microsoft YaHei", 10f);
-            box.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            parent.Controls.Add(box);
+            rightPanel.Controls.Add(pageSettings);
         }
 
         private string dnconsolePath;
@@ -982,87 +929,22 @@ namespace ClassLibrary1
 
         private void ShowPage(string page)
         {
-            if (page == "profile")
+            pageFunction.Visible = false;
+            pageSettings.Visible = false;
+
+            if (page == "function")
             {
-                pageProfile.Visible = true;
-                pageFunction.Visible = false;
-                pageProfile.BringToFront();
-                btnMenu1.BackColor = menuActive;
-                btnMenu2.BackColor = menuNormal;
-            }
-            else
-            {
-                pageProfile.Visible = false;
                 pageFunction.Visible = true;
                 pageFunction.BringToFront();
-                btnMenu1.BackColor = menuNormal;
-                btnMenu2.BackColor = menuActive;
-            }
-        }
-
-        private string GetDataFilePath()
-        {
-            string dir = Path.GetDirectoryName(Application.ExecutablePath);
-            return Path.Combine(dir, "profile.txt");
-        }
-
-        private void LoadProfile()
-        {
-            try
-            {
-                string path = GetDataFilePath();
-                if (!File.Exists(path)) return;
-
-                foreach (string line in File.ReadAllLines(path))
-                {
-                    int idx = line.IndexOf('=');
-                    if (idx < 0) continue;
-                    string key = line.Substring(0, idx);
-                    string val = line.Substring(idx + 1);
-                    switch (key)
-                    {
-                        case "name": txtName.Text = val; break;
-                        case "age": txtAge.Text = val; break;
-                        case "email": txtEmail.Text = val; break;
-                    }
-                }
-            }
-            catch { }
-        }
-
-        private void SaveProfile()
-        {
-            try
-            {
-                string path = GetDataFilePath();
-                string[] lines = new string[]
-                {
-                    "name=" + txtName.Text,
-                    "age=" + txtAge.Text,
-                    "email=" + txtEmail.Text
-                };
-                File.WriteAllLines(path, lines);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("保存失败：" + ex.Message, "错误",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
-        private void BtnSaveProfile_Click(object sender, EventArgs e)
-        {
-            string name = txtName.Text.Trim();
-            if (string.IsNullOrEmpty(name))
-            {
-                lblProfileMsg.Text = "请至少填写姓名！";
-                lblProfileMsg.ForeColor = Color.Red;
+                btnMenuEmulator.BackColor = menuActive;
+                btnMenuSettings.BackColor = menuNormal;
             }
             else
             {
-                SaveProfile();
-                lblProfileMsg.Text = "保存成功！";
-                lblProfileMsg.ForeColor = Color.Green;
+                pageSettings.Visible = true;
+                pageSettings.BringToFront();
+                btnMenuEmulator.BackColor = menuNormal;
+                btnMenuSettings.BackColor = menuActive;
             }
         }
 
