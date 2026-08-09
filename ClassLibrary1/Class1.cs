@@ -88,9 +88,12 @@ namespace ClassLibrary1
             rightPanel.BackColor = Color.White;
             mainLayout.Controls.Add(rightPanel, 1, 0);
 
-            // 创建页面
-            BuildFunctionPage();
+            // 创建页面（先构建功能设置页以初始化 miningComboBoxes）
             BuildSettingsPage();
+            // 加载所有设置（恢复 dnconsolePath、selectedInstances、mining 下拉框）
+            LoadAllSettings();
+            // 再构建模拟器管理页（需要 dnconsolePath 已恢复）
+            BuildFunctionPage();
 
             // 默认显示模拟器设置
             ShowPage("function");
@@ -114,12 +117,19 @@ namespace ClassLibrary1
             return btn;
         }
 
+        private System.Collections.Generic.Dictionary<int, ComboBox> miningComboBoxes
+            = new System.Collections.Generic.Dictionary<int, ComboBox>();
+        private System.Collections.Generic.Dictionary<int, CheckBox> miningCheckBoxes
+            = new System.Collections.Generic.Dictionary<int, CheckBox>();
+        private ComboBox miningLevelCombo;
+
         private void BuildSettingsPage()
         {
             pageSettings = new Panel();
             pageSettings.Dock = DockStyle.Fill;
             pageSettings.BackColor = Color.White;
             pageSettings.Visible = false;
+            pageSettings.AutoScroll = true;
 
             Label title = new Label();
             title.Text = "功能设置";
@@ -128,7 +138,369 @@ namespace ClassLibrary1
             title.AutoSize = true;
             pageSettings.Controls.Add(title);
 
+            // === 采矿设置区 ===
+            Label lblMining = new Label();
+            lblMining.Text = "采矿设置";
+            lblMining.Font = new Font("Microsoft YaHei", 12, FontStyle.Bold);
+            lblMining.Location = new Point(30, 70);
+            lblMining.AutoSize = true;
+            pageSettings.Controls.Add(lblMining);
+
+            // 采矿等级
+            Label lblLevel = new Label();
+            lblLevel.Text = "采矿等级";
+            lblLevel.Font = new Font("Microsoft YaHei", 10f);
+            lblLevel.Location = new Point(30, 100);
+            lblLevel.AutoSize = true;
+            pageSettings.Controls.Add(lblLevel);
+
+            miningLevelCombo = new ComboBox();
+            miningLevelCombo.DropDownStyle = ComboBoxStyle.DropDownList;
+            miningLevelCombo.Font = new Font("Microsoft YaHei", 10f);
+            miningLevelCombo.Location = new Point(110, 97);
+            miningLevelCombo.Size = new Size(80, 28);
+            for (int lv = 9; lv >= 1; lv--)
+                miningLevelCombo.Items.Add(lv.ToString());
+            miningLevelCombo.SelectedIndex = 0;
+            miningLevelCombo.SelectedIndexChanged += (s, ev) => SaveMiningSettings();
+            pageSettings.Controls.Add(miningLevelCombo);
+
+            // 表头
+            Label lblEnable = new Label();
+            lblEnable.Text = "启用";
+            lblEnable.Font = new Font("Microsoft YaHei", 9f, FontStyle.Bold);
+            lblEnable.ForeColor = Color.Gray;
+            lblEnable.Location = new Point(30, 140);
+            lblEnable.Size = new Size(40, 20);
+            pageSettings.Controls.Add(lblEnable);
+
+            Label lblTeam = new Label();
+            lblTeam.Text = "队伍";
+            lblTeam.Font = new Font("Microsoft YaHei", 9f, FontStyle.Bold);
+            lblTeam.ForeColor = Color.Gray;
+            lblTeam.Location = new Point(70, 140);
+            lblTeam.Size = new Size(60, 20);
+            pageSettings.Controls.Add(lblTeam);
+
+            Label lblResource = new Label();
+            lblResource.Text = "采集矿产";
+            lblResource.Font = new Font("Microsoft YaHei", 9f, FontStyle.Bold);
+            lblResource.ForeColor = Color.Gray;
+            lblResource.Location = new Point(200, 140);
+            lblResource.Size = new Size(100, 20);
+            pageSettings.Controls.Add(lblResource);
+
+            Panel headerSep = new Panel();
+            headerSep.Location = new Point(30, 163);
+            headerSep.Size = new Size(400, 1);
+            headerSep.BackColor = Color.FromArgb(220, 220, 220);
+            pageSettings.Controls.Add(headerSep);
+
+            string[] resources = new string[] { "肉", "木", "煤", "铁" };
+            int startY = 173;
+            int rowHeight = 42;
+
+            for (int i = 0; i < 6; i++)
+            {
+                int teamIndex = i;
+                int rowY = startY + i * rowHeight;
+
+                // 启用复选框
+                CheckBox chk = new CheckBox();
+                chk.Location = new Point(33, rowY + 10);
+                chk.AutoSize = false;
+                chk.Size = new Size(18, 18);
+                chk.Checked = true;
+                chk.Cursor = Cursors.Hand;
+                chk.CheckedChanged += (s, ev) => SaveMiningSettings();
+                pageSettings.Controls.Add(chk);
+                miningCheckBoxes[teamIndex] = chk;
+
+                // 队伍标签
+                Label lblTeamName = new Label();
+                lblTeamName.Text = "第 " + (i + 1) + " 队";
+                lblTeamName.Font = new Font("Microsoft YaHei", 10f);
+                lblTeamName.Location = new Point(70, rowY + 9);
+                lblTeamName.AutoSize = true;
+                pageSettings.Controls.Add(lblTeamName);
+
+                // 下拉框
+                ComboBox cmb = new ComboBox();
+                cmb.DropDownStyle = ComboBoxStyle.DropDownList;
+                cmb.Font = new Font("Microsoft YaHei", 10f);
+                cmb.Location = new Point(200, rowY + 7);
+                cmb.Size = new Size(120, 28);
+                cmb.Items.AddRange(resources);
+                cmb.SelectedIndex = 0;
+                cmb.SelectedIndexChanged += (s, ev) => SaveMiningSettings();
+                pageSettings.Controls.Add(cmb);
+                miningComboBoxes[teamIndex] = cmb;
+            }
+
+            // 加载已保存的设置（在 BuildUI 中统一调用 LoadAllSettings）
+
             rightPanel.Controls.Add(pageSettings);
+        }
+
+        private string GetConfigPath()
+        {
+            string dir = Path.GetDirectoryName(Application.ExecutablePath);
+            return Path.Combine(dir, "settings.txt");
+        }
+
+        /// <summary>
+        /// 保存所有设置到 settings.txt
+        /// </summary>
+        private void SaveAllSettings()
+        {
+            try
+            {
+                string path = GetConfigPath();
+                var lines = new System.Collections.Generic.List<string>();
+
+                // [emulator] 模拟器路径
+                lines.Add("[emulator]");
+                lines.Add("path=" + (dnconsolePath ?? ""));
+
+                // [selected] 勾选的模拟器
+                lines.Add("[selected]");
+                foreach (int idx in selectedInstances)
+                    lines.Add(idx.ToString());
+
+                // [mining] 采矿设置（三行：第1行等级，第2行启用状态，第3行资源选择，逗号分隔）
+                lines.Add("[mining]");
+                lines.Add(miningLevelCombo != null ? miningLevelCombo.SelectedIndex.ToString() : "0");
+                var enabledValues = new System.Collections.Generic.List<string>();
+                var resourceValues = new System.Collections.Generic.List<string>();
+                for (int i = 0; i < 6; i++)
+                {
+                    CheckBox chk;
+                    if (miningCheckBoxes.TryGetValue(i, out chk))
+                        enabledValues.Add(chk.Checked ? "1" : "0");
+                    else
+                        enabledValues.Add("1");
+
+                    ComboBox cmb;
+                    if (miningComboBoxes.TryGetValue(i, out cmb))
+                        resourceValues.Add(cmb.SelectedIndex.ToString());
+                    else
+                        resourceValues.Add("0");
+                }
+                lines.Add(string.Join(",", enabledValues.ToArray()));
+                lines.Add(string.Join(",", resourceValues.ToArray()));
+
+                File.WriteAllLines(path, lines.ToArray());
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// 从 settings.txt 加载所有设置
+        /// </summary>
+        private void LoadAllSettings()
+        {
+            try
+            {
+                string path = GetConfigPath();
+                if (!File.Exists(path)) return;
+
+                string section = "";
+                int miningIndex = 0;
+
+                foreach (string rawLine in File.ReadAllLines(path))
+                {
+                    string line = rawLine.Trim();
+                    if (string.IsNullOrEmpty(line)) continue;
+
+                    if (line.StartsWith("[") && line.EndsWith("]"))
+                    {
+                        section = line.Substring(1, line.Length - 2);
+                        miningIndex = 0;
+                        continue;
+                    }
+
+                    switch (section)
+                    {
+                        case "emulator":
+                            if (line.StartsWith("path="))
+                            {
+                                string savedPath = line.Substring(5).Trim();
+                                if (!string.IsNullOrEmpty(savedPath))
+                                {
+                                    if (File.Exists(savedPath) && (savedPath.EndsWith("ldconsole.exe") || savedPath.EndsWith("dnconsole.exe")))
+                                    {
+                                        dnconsolePath = savedPath;
+                                        AddConsolePath(savedPath);
+                                    }
+                                    else if (Directory.Exists(savedPath))
+                                    {
+                                        string lc = Path.Combine(savedPath, "ldconsole.exe");
+                                        if (File.Exists(lc)) { dnconsolePath = lc; AddConsolePath(lc); }
+                                        else
+                                        {
+                                            string dc = Path.Combine(savedPath, "dnconsole.exe");
+                                            if (File.Exists(dc)) { dnconsolePath = dc; AddConsolePath(dc); }
+                                        }
+                                    }
+                                }
+                            }
+                            break;
+
+                        case "selected":
+                            int idx;
+                            if (int.TryParse(line, out idx))
+                                selectedInstances.Add(idx);
+                            break;
+
+                        case "mining":
+                            string[] mParts = line.Split(',');
+                            // 第一行：采矿等级
+                            if (miningIndex == 0)
+                            {
+                                int lvIdx;
+                                if (int.TryParse(line.Trim(), out lvIdx) && miningLevelCombo != null
+                                    && lvIdx >= 0 && lvIdx < miningLevelCombo.Items.Count)
+                                    miningLevelCombo.SelectedIndex = lvIdx;
+                            }
+                            // 第二行：启用状态
+                            else if (miningIndex == 1)
+                            {
+                                for (int mi = 0; mi < mParts.Length && mi < 6; mi++)
+                                {
+                                    CheckBox chk;
+                                    if (miningCheckBoxes.TryGetValue(mi, out chk))
+                                        chk.Checked = mParts[mi].Trim() == "1";
+                                }
+                            }
+                            // 第三行：资源选择
+                            else if (miningIndex == 2)
+                            {
+                                for (int mi = 0; mi < mParts.Length && mi < 6; mi++)
+                                {
+                                    int mIdx;
+                                    if (int.TryParse(mParts[mi].Trim(), out mIdx))
+                                    {
+                                        ComboBox cmb;
+                                        if (miningComboBoxes.TryGetValue(mi, out cmb) && mIdx >= 0 && mIdx < cmb.Items.Count)
+                                            cmb.SelectedIndex = mIdx;
+                                    }
+                                }
+                            }
+                            miningIndex++;
+                            break;
+                    }
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// 获取采矿等级（供 MyAutomation 调用）
+        /// 返回 1~9 的等级，默认 9
+        /// </summary>
+        public static int GetMiningLevel()
+        {
+            try
+            {
+                string dir = Path.GetDirectoryName(Application.ExecutablePath);
+                string path = Path.Combine(dir, "settings.txt");
+                if (!File.Exists(path)) return 9;
+
+                string section = "";
+                int miningLineIndex = 0;
+                foreach (string rawLine in File.ReadAllLines(path))
+                {
+                    string line = rawLine.Trim();
+                    if (string.IsNullOrEmpty(line)) continue;
+                    if (line.StartsWith("[") && line.EndsWith("]"))
+                    {
+                        section = line.Substring(1, line.Length - 2);
+                        miningLineIndex = 0;
+                        continue;
+                    }
+                    if (section == "mining" && miningLineIndex == 0)
+                    {
+                        int lvIdx;
+                        if (int.TryParse(line, out lvIdx) && lvIdx >= 0 && lvIdx <= 8)
+                            return 9 - lvIdx;
+                        return 9;
+                    }
+                    if (section == "mining") miningLineIndex++;
+                }
+            }
+            catch { }
+            return 9;
+        }
+
+        /// <summary>
+        /// 获取采矿设置（供 MyAutomation 调用）
+        /// 返回长度为6的字符串数组，对应第1~6队采集的矿产（"肉"/"木"/"煤"/"铁"）
+        /// 未启用的队伍返回空字符串 ""
+        /// </summary>
+        public static string[] GetMiningResources()
+        {
+            string[] resources = new string[] { "肉", "木", "煤", "铁" };
+            string[] result = new string[] { "", "", "", "", "", "" };
+            bool[] enabled = new bool[] { true, true, true, true, true, true };
+            try
+            {
+                string dir = Path.GetDirectoryName(Application.ExecutablePath);
+                string path = Path.Combine(dir, "settings.txt");
+                if (!File.Exists(path)) return result;
+
+                string section = "";
+                int miningLineIndex = 0;
+                foreach (string rawLine in File.ReadAllLines(path))
+                {
+                    string line = rawLine.Trim();
+                    if (string.IsNullOrEmpty(line)) continue;
+                    if (line.StartsWith("[") && line.EndsWith("]"))
+                    {
+                        section = line.Substring(1, line.Length - 2);
+                        miningLineIndex = 0;
+                        continue;
+                    }
+                    if (section == "mining")
+                    {
+                        if (miningLineIndex == 0)
+                        {
+                            // 第一行：采矿等级（跳过）
+                        }
+                        else if (miningLineIndex == 1)
+                        {
+                            // 第二行：启用状态
+                            string[] parts = line.Split(',');
+                            for (int mi = 0; mi < parts.Length && mi < 6; mi++)
+                                enabled[mi] = parts[mi].Trim() == "1";
+                        }
+                        else if (miningLineIndex == 2)
+                        {
+                            // 第三行：资源选择
+                            string[] parts = line.Split(',');
+                            for (int mi = 0; mi < parts.Length && mi < 6; mi++)
+                            {
+                                int idx;
+                                if (int.TryParse(parts[mi].Trim(), out idx) && idx >= 0 && idx < resources.Length)
+                                    result[mi] = enabled[mi] ? resources[idx] : "";
+                            }
+                            break; // 读完三行即可
+                        }
+                        miningLineIndex++;
+                    }
+                }
+            }
+            catch { }
+            return result;
+        }
+
+        private void SaveMiningSettings()
+        {
+            SaveAllSettings();
+        }
+
+        private void LoadMiningSettings()
+        {
+            LoadAllSettings();
         }
 
         private string dnconsolePath;
@@ -308,7 +680,6 @@ namespace ClassLibrary1
                 };
 
                 // 仅启动时构建一次
-                LoadSelectedInstances();
                 BuildEmulatorRows(GetEmulatorInstances());
 
                 // 10秒定时刷新运行状态
@@ -691,8 +1062,7 @@ namespace ClassLibrary1
 
         private string GetEmulatorConfigPath()
         {
-            string dir = Path.GetDirectoryName(Application.ExecutablePath);
-            return Path.Combine(dir, "emulator_config.txt");
+            return GetConfigPath();
         }
 
         private string FindDnConsole()
@@ -704,27 +1074,7 @@ namespace ClassLibrary1
             string defaultConfig = @"O:\app\雷电\ldmutiplayer\pathconfig.ini";
             FindAllConsolesFromPathConfig(defaultConfig);
 
-            // 从用户配置读取额外路径
-            string userConfig = GetEmulatorConfigPath();
-            if (File.Exists(userConfig))
-            {
-                string savedPath = File.ReadAllText(userConfig).Trim();
-                if (!string.IsNullOrEmpty(savedPath))
-                {
-                    if (File.Exists(savedPath) && (savedPath.EndsWith("ldconsole.exe") || savedPath.EndsWith("dnconsole.exe")))
-                        AddConsolePath(savedPath);
-                    else if (Directory.Exists(savedPath))
-                    {
-                        string lc = Path.Combine(savedPath, "ldconsole.exe");
-                        if (File.Exists(lc)) AddConsolePath(lc);
-                        else
-                        {
-                            string dc = Path.Combine(savedPath, "dnconsole.exe");
-                            if (File.Exists(dc)) AddConsolePath(dc);
-                        }
-                    }
-                }
-            }
+            // 从统一配置文件读取（在 LoadAllSettings 中已处理）
 
             // 回退：直接查找
             string fallback1 = @"O:\app\雷电\新建文件夹\leidian\LDPlayer9\ldconsole.exe";
@@ -809,10 +1159,10 @@ namespace ClassLibrary1
                 {
                     try
                     {
-                        string path = GetEmulatorConfigPath();
-                        File.WriteAllText(path, ofd.FileName);
                         dnconsolePath = ofd.FileName;
+                        AddConsolePath(ofd.FileName);
                         BuildEmulatorRows(GetEmulatorInstances());
+                        SaveAllSettings();
                         MessageBox.Show("路径已保存：" + ofd.FileName, "成功",
                             MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
@@ -950,37 +1300,17 @@ namespace ClassLibrary1
 
         private string GetSelectedEmulatorsPath()
         {
-            string dir = Path.GetDirectoryName(Application.ExecutablePath);
-            return Path.Combine(dir, "selected_emulators.txt");
+            return GetConfigPath();
         }
 
         private void LoadSelectedInstances()
         {
-            try
-            {
-                string path = GetSelectedEmulatorsPath();
-                if (!File.Exists(path)) return;
-                foreach (string line in File.ReadAllLines(path))
-                {
-                    int idx;
-                    if (int.TryParse(line.Trim(), out idx))
-                        selectedInstances.Add(idx);
-                }
-            }
-            catch { }
+            // 在 LoadAllSettings 中统一加载
         }
 
         private void SaveSelectedInstances()
         {
-            try
-            {
-                string path = GetSelectedEmulatorsPath();
-                var lines = new System.Collections.Generic.List<string>();
-                foreach (int idx in selectedInstances)
-                    lines.Add(idx.ToString());
-                File.WriteAllLines(path, lines.ToArray());
-            }
-            catch { }
+            SaveAllSettings();
         }
 
         private void BtnExit_Click(object sender, EventArgs e)
